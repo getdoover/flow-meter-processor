@@ -1,3 +1,4 @@
+import zoneinfo
 from pathlib import Path
 
 from pydoover import config
@@ -24,6 +25,16 @@ _TOTALISER = config.equal("input_type", InputType.TOTALISER)
 _RATE = config.equal("input_type", InputType.RATE)
 _ANALOG = config.equal("input_type", InputType.ANALOG)
 _RATE_OR_ANALOG = config.one_of("input_type", [InputType.RATE, InputType.ANALOG])
+
+# TimezoneConfig offers whatever zoneinfo finds on the exporting machine, which
+# can include non-IANA entries such as `localtime` that the Lambda runtime does
+# not have. Offer the real zones only.
+_TIMEZONES = sorted(
+    z
+    for z in zoneinfo.available_timezones()
+    if z not in ("localtime", "posixrules", "Factory")
+)
+
 
 # Every 15 minutes: rolls Today into Yesterday at local midnight, clears a rate
 # that has gone stale, and checks the no-flow notification, even while no
@@ -191,6 +202,7 @@ class FlowMeterProcessorConfig(config.Schema):
         default=DEFAULT_TIMEZONE,
         position=15,
     )
+    timezone.choices = _TIMEZONES
 
     no_flow_alert_enabled = config.Boolean(
         "No Flow Alert",
