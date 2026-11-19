@@ -8,7 +8,7 @@
         "description": "Turns raw flow meter signals (pulse counts, totaliser readings, rates or 4-20 mA) into flow rate and daily and total volume.",
         "long_description": "README.md",
         "depends_on": [],
-        "organisation_id": 93957122026437134,
+        "organisation_id": null,
         "export_config_command": "export-config",
         "export_ui_command": "export-ui",
         "export_notification_command": "export-notifications",
