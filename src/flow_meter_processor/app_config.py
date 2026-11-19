@@ -2,7 +2,7 @@ import zoneinfo
 from pathlib import Path
 
 from pydoover import config
-from pydoover.config import ApplicationPosition
+from pydoover.config import ApplicationDefaultOpen, ApplicationPosition
 from pydoover.processor import ManySubscriptionConfig, ScheduleConfig, TimezoneConfig
 
 from .flow import (
@@ -255,7 +255,8 @@ class FlowMeterProcessorConfig(config.Schema):
         position=21,
     )
 
-    position = ApplicationPosition(position=22)
+    position = ApplicationPosition(default=50, position=22)
+    default_open = ApplicationDefaultOpen(default=True, position=23)
 
 
 def export():

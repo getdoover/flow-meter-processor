@@ -70,6 +70,8 @@ Until the first reading arrives every value shows empty, and nothing is notified
 | **High Flow Threshold** | `high_flow_threshold` | Rate (display rate units) for the high flow notification | `10.0` |
 | **Subscription** | `dv_proc_subscriptions` | Channels the processor listens to | `["io_state"]` |
 | **Schedule** | `dv_proc_schedules` | Periodic check for the day rollover, a stale rate and no flow | `rate(15 minutes)` |
+| **Position** | `dv_app_position` | Hidden. Where the app sits on the device page; smaller is higher | `50` |
+| **Default Open** | `dv_app_default_open` | Hidden. Whether the app's panel starts expanded | `true` |
 
 Only the scaling fields for the selected Input Type are shown.
 
