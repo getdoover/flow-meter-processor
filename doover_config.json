@@ -1,0 +1,29 @@
+{
+    "flow_meter_processor": {
+        "name": "flow_meter_processor",
+        "display_name": "Flow Meter Processor",
+        "type": "PRO",
+        "visibility": "PUB",
+        "allow_many": true,
+        "description": "Turns raw flow meter signals (pulse counts, totaliser readings, rates or 4-20 mA) into flow rate and daily and total volume.",
+        "long_description": "README.md",
+        "depends_on": [],
+        "organisation_id": 93957122026437134,
+        "export_config_command": "export-config",
+        "export_ui_command": "export-ui",
+        "export_notification_command": "export-notifications",
+        "lambda_config": {
+            "Environment": {},
+            "Runtime": "python3.13",
+            "Timeout": 60,
+            "Handler": "src.flow_meter_processor.handler",
+            "MemorySize": 128,
+            "Architectures": [
+                "arm64"
+            ]
+        },
+        "repository_url": "https://github.com/getdoover/flow-meter-processor",
+        "data_access": "read_only",
+        "has_ui": true
+    }
+}
