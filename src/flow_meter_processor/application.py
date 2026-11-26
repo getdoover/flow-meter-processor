@@ -26,6 +26,57 @@ from .flow import (
 
 log = logging.getLogger(__name__)
 
+# The flow input's point id: a blank Input Message Path reads from its automatic
+# address, $io_state.<app key>.flow, which the edge bridge fills in.
+POINT_ID = "flow"
+AUTO_CHANNEL = "io_state"
+IO_POINTS_VERSION = 1
+
+# The flow input's label in io_points, per input type.
+POINT_LABELS = {
+    InputType.PULSE: "Flow meter pulse count",
+    InputType.TOTALISER: "Flow meter total",
+    InputType.RATE: "Flow rate",
+    InputType.ANALOG: "Flow meter signal",
+}
+
+
+def resolve_input_path(value: Any, app_key: str | None) -> tuple[str | None, bool]:
+    """The message path the flow reading is read from, and whether it is automatic.
+
+    A blank path means the automatic address '$io_state.<app key>.flow'; an
+    explicit one is used as given.
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        if not app_key:
+            return None, True
+        return f"${AUTO_CHANNEL}.{app_key}.{POINT_ID}", True
+    return value.strip() if isinstance(value, str) else value, False
+
+
+def point_label(input_type: str | None, analog_units: str | None = None) -> str:
+    label = POINT_LABELS.get(input_type or "", "Flow meter")
+    if input_type == InputType.ANALOG and analog_units:
+        label = f"{label} ({analog_units})"
+    return label
+
+
+def io_points(path: str | None, auto: bool, label: str) -> dict:
+    """The io_points tag: this install's one input, and where it is read."""
+    points = []
+    if path:
+        points.append(
+            {
+                "id": POINT_ID,
+                "label": label,
+                "kind": "input",
+                "path": path,
+                "auto": auto,
+            }
+        )
+    return {"version": IO_POINTS_VERSION, "points": points}
+
+
 # State field -> the tag that carries it between invocations.
 STATE_TAGS = {
     "last_ts": "last_reading_ts",
@@ -79,9 +130,12 @@ class FlowMeterProcessorApplication(Application):
     notifications_cls = FlowMeterNotifications
 
     async def setup(self):
+        self._input_path_text, self._input_auto = resolve_input_path(
+            _str(self.config.input_message_path), getattr(self, "app_key", None)
+        )
         try:
             self._input_channel, self._input_path = self._parse_input_message_path(
-                _str(self.config.input_message_path)
+                self._input_path_text
             )
         except ValueError as exc:
             log.error("Flow meter input not configured: %s", exc)
@@ -115,9 +169,11 @@ class FlowMeterProcessorApplication(Application):
         await self.handle_reading(raw, self._message_ts_ms(event))
 
     async def on_schedule(self, event):
+        await self.publish_io_points()
         await self.handle_tick(_now_ms())
 
     async def on_deployment(self, event):
+        await self.publish_io_points()
         # Republish the display copies, which follow the display units in config.
         state = self.load_state()
         if state.last_ts is None:
@@ -125,6 +181,19 @@ class FlowMeterProcessorApplication(Application):
         await self.save_state(state)
 
     # -- core -----------------------------------------------------------------
+
+    async def publish_io_points(self):
+        """Write the io_points tag, only when it has changed."""
+        points = io_points(
+            self._input_path_text,
+            self._input_auto,
+            point_label(
+                _str(self.config.input_type, InputType.PULSE),
+                _str(self.config.analog_input_units, "mA"),
+            ),
+        )
+        if self.tags.io_points.get() != points:
+            await self.tags.io_points.set(points)
 
     async def handle_reading(self, raw: float, ts_ms: int):
         settings = self.settings()

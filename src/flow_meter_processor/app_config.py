@@ -59,10 +59,11 @@ class FlowMeterProcessorConfig(config.Schema):
         "Input Message Path",
         name="input_message_path",
         description=(
-            "Message path holding the raw reading. Use '$channel.path.to.value', "
-            "for example '$io_state.flow_1'. The channel must be in the subscription list."
+            "The raw reading. Leave blank to use this input's automatic address, "
+            "which the edge bridge fills in. Or give a message path, e.g. "
+            "'$io_state.x'. Its channel must be in the subscription list."
         ),
-        default="$io_state.flow_1",
+        default="",
         position=1,
     )
 

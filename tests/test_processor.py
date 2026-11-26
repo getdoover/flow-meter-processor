@@ -7,7 +7,14 @@ import pytest
 
 from flow_meter_processor.app_config import FlowMeterProcessorConfig
 from flow_meter_processor.app_tags import FlowMeterProcessorTags
-from flow_meter_processor.application import FlowMeterProcessorApplication
+from flow_meter_processor.application import (
+    FlowMeterProcessorApplication,
+    io_points,
+    point_label,
+    resolve_input_path,
+)
+
+APP_KEY = "flow_meter_processor_1"
 
 
 class Value:
@@ -71,6 +78,7 @@ class FakeNotification:
 
 def make_app(**config):
     app = object.__new__(FlowMeterProcessorApplication)
+    app.app_key = APP_KEY
     app.config = make_config(**config)
     app.tags = FakeTags()
     app.notifications = SimpleNamespace(
@@ -230,3 +238,98 @@ def test_config_defaults_load_for_hidden_fields():
     assert cfg.max_gap_minutes.value == 60.0
     assert cfg.timezone.value == "Australia/Brisbane"
     assert cfg.no_flow_alert_enabled.value is False
+
+
+# -- automatic input address and io_points ------------------------------------
+
+
+def test_blank_path_resolves_to_automatic_address():
+    assert resolve_input_path("", APP_KEY) == (f"$io_state.{APP_KEY}.flow", True)
+    assert resolve_input_path("  ", APP_KEY) == (f"$io_state.{APP_KEY}.flow", True)
+    assert resolve_input_path(None, APP_KEY) == (f"$io_state.{APP_KEY}.flow", True)
+    assert resolve_input_path("", None) == (None, True)
+
+
+def test_explicit_path_wins():
+    assert resolve_input_path(" $io_state.flow_1 ", APP_KEY) == (
+        "$io_state.flow_1",
+        False,
+    )
+    assert resolve_input_path("$on_dm_event.x", APP_KEY) == ("$on_dm_event.x", False)
+
+
+def test_point_labels_fit_the_input_type():
+    assert point_label("Pulse Count") == "Flow meter pulse count"
+    assert point_label("Totaliser") == "Flow meter total"
+    assert point_label("Rate") == "Flow rate"
+    assert point_label("Analog", "mA") == "Flow meter signal (mA)"
+    assert point_label("Analog", "V") == "Flow meter signal (V)"
+    assert point_label(None) == "Flow meter"
+    for label in (point_label(t) for t in ("Pulse Count", "Totaliser", "Rate")):
+        assert "_" not in label
+
+
+def test_io_points_shape():
+    assert io_points("$io_state.k.flow", True, "Flow rate") == {
+        "version": 1,
+        "points": [
+            {
+                "id": "flow",
+                "label": "Flow rate",
+                "kind": "input",
+                "path": "$io_state.k.flow",
+                "auto": True,
+            }
+        ],
+    }
+    assert io_points(None, True, "Flow rate") == {"version": 1, "points": []}
+
+
+@pytest.mark.asyncio
+async def test_blank_path_reads_nested_automatic_address():
+    app = make_app(input_message_path="")
+    await app.setup()
+    await app.on_message_create(event({APP_KEY: {"flow": 100.0, "other": 1}}, T0))
+    assert app.tags.raw_reading.value == 100.0
+    # The old flat key is not the automatic address.
+    await app.on_message_create(event({"flow": 200.0}, T0 + MIN))
+    assert app.tags.raw_reading.value == 100.0
+    await app.on_message_create(event({APP_KEY: {"flow": 101.0}}, T0 + 2 * MIN))
+    assert app.tags.raw_reading.value == 101.0
+
+
+@pytest.mark.asyncio
+async def test_io_points_published_on_deployment_and_schedule_when_changed():
+    app = make_app(input_message_path="", input_type="Rate")
+    await app.setup()
+    await app.on_deployment(None)
+    assert app.tags.io_points.value == {
+        "version": 1,
+        "points": [
+            {
+                "id": "flow",
+                "label": "Flow rate",
+                "kind": "input",
+                "path": f"$io_state.{APP_KEY}.flow",
+                "auto": True,
+            }
+        ],
+    }
+
+    writes = []
+    original = app.tags.io_points.set
+
+    async def counting(value):
+        writes.append(value)
+        await original(value)
+
+    app.tags.io_points.set = counting
+    await app.on_schedule(None)
+    assert writes == []  # unchanged, so not written again
+
+    app.config.input_message_path.value = "$io_state.flow_1"
+    await app.setup()
+    await app.on_schedule(None)
+    assert len(writes) == 1
+    assert writes[0]["points"][0]["path"] == "$io_state.flow_1"
+    assert writes[0]["points"][0]["auto"] is False

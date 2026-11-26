@@ -41,4 +41,6 @@ class FlowMeterProcessorTags(Tags):
     # Last under-range analog input, for the warning text.
     state_fault_input = Tag("number", default=None)
     no_flow_alert_active = Tag("boolean", default=False)
+    # The input this install reads and where: {"version": 1, "points": [...]}.
+    io_points = Tag("object", default=None)
     high_flow_alert_active = Tag("boolean", default=False)

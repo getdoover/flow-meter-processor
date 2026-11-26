@@ -39,8 +39,9 @@ Key capabilities:
 ## Getting Started
 
 1. Install the app on the device whose messages carry the meter reading.
-2. Choose the **Input Type** and set **Input Message Path** to where the reading arrives,
-   e.g. `$io_state.flow_volume`.
+2. Choose the **Input Type**. Leave **Input Message Path** blank to read the meter from
+   its automatic address (see [Input address](#input-address)), or set it to where the
+   reading arrives, e.g. `$io_state.flow_volume`.
 3. Make sure that channel is in the **Subscription** list (default `io_state`).
 4. Set the scaling for the input type, and the display units.
 
@@ -51,7 +52,7 @@ Until the first reading arrives every value shows empty, and nothing is notified
 | Setting | Key | Description | Default |
 |---------|-----|-------------|---------|
 | **Input Type** | `input_type` | `Pulse Count`, `Totaliser`, `Rate` or `Analog` | `Pulse Count` |
-| **Input Message Path** | `input_message_path` | `$channel.path.to.value` holding the raw reading | `$io_state.flow_1` |
+| **Input Message Path** | `input_message_path` | The raw reading. Blank uses the automatic address; or a message path, e.g. `$io_state.flow_1` | blank |
 | **Litres per Pulse** | `litres_per_pulse` | Pulse Count: litres per pulse | `1.0` |
 | **Totaliser Units** | `totaliser_units` | Totaliser: `L`, `kL`, `ML` or `m³` | `L` |
 | **Totaliser Multiplier** | `totaliser_multiplier` | Totaliser: extra scale before the units (e.g. `10` for a register in tens) | `1.0` |
@@ -74,6 +75,14 @@ Until the first reading arrives every value shows empty, and nothing is notified
 | **Default Open** | `dv_app_default_open` | Hidden. Whether the app's panel starts expanded | `true` |
 
 Only the scaling fields for the selected Input Type are shown.
+
+### Input address
+
+The meter's reading has the point id `flow`. Leave **Input Message Path** blank and the
+app reads it from its automatic address, `$io_state.<APP_KEY>.flow` (for app key
+`flow_meter_processor_1`, `$io_state.flow_meter_processor_1.flow`), which the edge bridge
+fills in. So the reading is wired up in one place, on the edge. An explicit path, like
+`$io_state.flow_1`, is used as given instead.
 
 ### How each input type is read
 
@@ -130,7 +139,7 @@ A meter that has never reported, or has stopped reporting, sends neither.
 
 | Channel | Direction | Contents |
 |---------|-----------|----------|
-| The Input Message Path's channel (default `io_state`) | in | The raw reading, at the configured path |
+| The Input Message Path's channel (`io_state` for the automatic address) | in | The raw reading, at its path |
 | `tag_values` | out | The tags below, under this install's app key |
 | `notifications` | out | The no-flow and high-flow notifications |
 
@@ -153,6 +162,23 @@ Canonical units: L/s for rate, litres for volume, milliseconds since epoch for t
 | **raw_reading** | number | The last raw reading as received |
 | **sensor_fault** | string | `under_range` while an analog input is in fault, otherwise `null` |
 | **last_reading_ts** / **first_reading_ts** | number | Times of the last and first accepted readings |
+| **io_points** | object | The input this install reads, and where (below) |
+
+#### io_points
+
+Written on every deployment and schedule check, only when it changes. The edge bridge
+reads it to know which value to fill in, and where:
+
+```json
+{"version": 1, "points": [
+  {"id": "flow", "label": "Flow meter total", "kind": "input",
+   "path": "$io_state.flow_meter_processor_1.flow", "auto": true}
+]}
+```
+
+- `label` follows the Input Type: `Flow meter pulse count`, `Flow meter total`,
+  `Flow rate`, or `Flow meter signal (mA)` / `(V)`.
+- `path` is where the app reads the reading; `auto` is whether that is the automatic address.
 
 The app also keeps its working state in tags (`state_last_value`, `state_input_type`,
 `state_day`, `state_fault_input`, `no_flow_alert_active`, `high_flow_alert_active`,
